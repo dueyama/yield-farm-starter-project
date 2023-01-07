@@ -3,7 +3,10 @@
 import React, { Component } from 'react'
 import Web3 from 'web3'
 import DaiToken from '../abis/DaiToken.json'
+import DappToken from '../abis/DappToken.json'
+import TokenFarm from '../abis/TokenFarm.json'
 import Navbar from './Navbar'
+import Main from './Main'
 import './App.css'
 
 class App extends Component {
@@ -23,6 +26,7 @@ class App extends Component {
     this.setState({ account: accounts[0]})
     // ユーザーが Metamask を介して接続しているネットワークIDを取得
     const networkId = await web3.eth.net.getId()
+
     // DaiToken のデータを取得
     const daiTokenData = DaiToken.networks[networkId]
     if(daiTokenData){
@@ -39,9 +43,42 @@ class App extends Component {
     }else{
       window.alert('DaiToken contract not deployed to detected network.')
     }
+    // ↓ --- 1. 追加するコード ---- ↓
+    // DappToken のデータを取得
+    const dappTokenData = DappToken.networks[networkId]
+    if(dappTokenData){
+      // DappToken の情報を dappToken に格納する
+      const dappToken = new web3.eth.Contract(DappToken.abi, dappTokenData.address)
+      // constructor() 内の dappToken の情報を更新する
+      this.setState({dappToken})
+      // ユーザーの Dapp トークンの残高を取得する
+      let dappTokenBalance = await dappToken.methods.balanceOf(this.state.account).call()
+      // dappTokenBalance（ユーザーの Dapp トークンの残高）をストリング型に変更する
+      this.setState({dappTokenBalance: dappTokenBalance.toString()})
+      // ユーザーの Dapp トークンの残高をフロントエンドの Console に出力する
+      console.log(dappTokenBalance.toString())
+    }else{
+      window.alert('DappToken contract not deployed to detected network.')
+    }
 
+    // tokenFarmData のデータを取得
+    const tokenFarmData = TokenFarm.networks[networkId]
+    if(tokenFarmData){
+      // TokenFarm の情報を tokenFarm に格納する
+      const tokenFarm = new web3.eth.Contract(TokenFarm.abi, tokenFarmData.address)
+      // constructor() 内の tokenFarm の情報を更新する
+      this.setState({tokenFarm})
+      // tokenFarm 内にステーキングされている Dai トークンの残高を取得する
+      let tokenFarmBalance = await tokenFarm.methods.stakingBalance(this.state.account).call()
+      // tokenFarmBalance をストリング型に変更する
+      this.setState({stakingBalance: tokenFarmBalance.toString()})
+      // ユーザーの tokenFarmBalance をフロントエンドの Console に出力する
+      console.log(tokenFarmBalance.toString())
+    }else{
+      window.alert('TokenFarm contract not deployed to detected network.')
+    }
+    // ↑ --- 1. 追加するコード ---- ↑
   }
-
   // loadWeb3(): ユーザーが Metamask アカウントを持っているか確認する関数
   async loadWeb3() {
     // ユーザーが Metamask のアカウントを持っていた場合は、アドレスを取得
@@ -59,6 +96,24 @@ class App extends Component {
 
     this.setState({ loading: false})
   }
+  // ↓ --- 2. 追加するコード ---- ↓
+  // TokenFarm.sol に記載されたステーキング機能を呼び出す
+  stakeTokens = (amount) => {
+    this.setState({loading: true})
+    this.state.daiToken.methods.approve(this.state.tokenFarm._address, amount).send({from: this.state.account}).on('transactionHash', (hash)=> {
+      this.state.tokenFarm.methods.stakeTokens(amount).send({from: this.state.account}).on('transactionHash', (hash) => {
+        this.setState({loading: false})
+      })
+    })
+  }
+  // TokenFarm.sol に記載されたアンステーキング機能を呼び出す
+  unstakeTokens = (amount) => {
+    this.setState({loading: true})
+    this.state.tokenFarm.methods.unstakeTokens().send({from: this.state.account}).on('transactionHash', (hash) => {
+      this.setState({loading: false})
+    })
+  }
+  // ↑ --- 2. 追加するコード ---- ↑
 
   // constructor(): ブロックチェーンから読み込んだデータ + ユーザーの状態を更新する関数
   constructor(props) {
@@ -74,8 +129,21 @@ class App extends Component {
       loading: true
     }
   }
+
   // フロントエンドのレンダリングが以下で実行される
   render() {
+    let content
+    if(this.state.loading){
+      content = <p id='loader' className='text-center'>Loading...</p>
+    }else{
+      content = <Main
+        daiTokenBalance = {this.state.daiTokenBalance}
+        dappTokenBalance = {this.state.dappTokenBalance}
+        stakingBalance = {this.state.stakingBalance}
+        stakeTokens = {this.stakeTokens}
+        unstakeTokens={this.unstakeTokens}
+      />
+    }
     return (
       <div>
         <Navbar account={this.state.account} />
@@ -90,7 +158,7 @@ class App extends Component {
                 >
                 </a>
 
-                <h1>Hello, World!</h1>
+                {content}
 
               </div>
             </main>
