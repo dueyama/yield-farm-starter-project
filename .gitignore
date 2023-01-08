@@ -22,3 +22,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+src/abis/DaiToken.json
+src/abis/DappToken.json
+src/abis/Migrations.json
+src/abis/TokenFarm.json
